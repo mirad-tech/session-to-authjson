@@ -1,0 +1,840 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Session → Auth.json 转换器</title>
+    <meta name="description" content="将 ChatGPT 网页端 Session JSON 转换为 Codex CLI auth.json 格式，纯前端本地转换，不上传任何数据。">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <style>
+      :root {
+        --bg-primary: #0a0e17;
+        --bg-secondary: #111827;
+        --bg-card: rgba(17, 24, 39, 0.7);
+        --bg-card-hover: rgba(17, 24, 39, 0.85);
+        --bg-input: rgba(6, 10, 20, 0.8);
+        --border: rgba(99, 102, 241, 0.15);
+        --border-hover: rgba(99, 102, 241, 0.35);
+        --border-active: rgba(99, 102, 241, 0.6);
+        --text-primary: #f1f5f9;
+        --text-secondary: #94a3b8;
+        --text-muted: #64748b;
+        --accent: #6366f1;
+        --accent-glow: rgba(99, 102, 241, 0.25);
+        --accent-hover: #818cf8;
+        --cyan: #22d3ee;
+        --cyan-glow: rgba(34, 211, 238, 0.15);
+        --green: #34d399;
+        --green-bg: rgba(52, 211, 153, 0.08);
+        --green-border: rgba(52, 211, 153, 0.3);
+        --red: #f87171;
+        --red-bg: rgba(248, 113, 113, 0.08);
+        --red-border: rgba(248, 113, 113, 0.3);
+        --shadow-lg: 0 25px 60px -12px rgba(0, 0, 0, 0.5);
+        --shadow-glow: 0 0 40px -10px rgba(99, 102, 241, 0.3);
+      }
+
+      * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+
+      body {
+        min-height: 100vh;
+        background: var(--bg-primary);
+        color: var(--text-primary);
+        font-family: 'Inter', ui-sans-serif, system-ui, -apple-system, sans-serif;
+        overflow-x: hidden;
+      }
+
+      /* Animated background grid */
+      body::before {
+        content: '';
+        position: fixed;
+        inset: 0;
+        background:
+          radial-gradient(ellipse 80% 50% at 50% -20%, rgba(99, 102, 241, 0.12), transparent),
+          radial-gradient(ellipse 60% 40% at 80% 100%, rgba(34, 211, 238, 0.06), transparent),
+          url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100' height='100'%3E%3Cg fill='none' stroke='%23ffffff' stroke-width='0.5' opacity='0.04'%3E%3Cpath d='M0 25h100M0 50h100M0 75h100M25 0v100M50 0v100M75 0v100'/%3E%3C/g%3E%3C/svg%3E");
+        pointer-events: none;
+        z-index: 0;
+      }
+
+      /* Floating orbs */
+      .orb {
+        position: fixed;
+        border-radius: 50%;
+        filter: blur(80px);
+        opacity: 0.4;
+        pointer-events: none;
+        z-index: 0;
+        animation: float 20s ease-in-out infinite;
+      }
+      .orb-1 {
+        width: 400px; height: 400px;
+        background: rgba(99, 102, 241, 0.15);
+        top: -100px; left: -100px;
+        animation-delay: 0s;
+      }
+      .orb-2 {
+        width: 300px; height: 300px;
+        background: rgba(34, 211, 238, 0.1);
+        bottom: -50px; right: -50px;
+        animation-delay: -7s;
+      }
+      .orb-3 {
+        width: 250px; height: 250px;
+        background: rgba(139, 92, 246, 0.08);
+        top: 40%; left: 60%;
+        animation-delay: -14s;
+      }
+      @keyframes float {
+        0%, 100% { transform: translate(0, 0) scale(1); }
+        33% { transform: translate(30px, -20px) scale(1.05); }
+        66% { transform: translate(-20px, 15px) scale(0.95); }
+      }
+
+      button, textarea, input { font: inherit; }
+
+      /* ─── Shell ─── */
+      .shell {
+        position: relative;
+        z-index: 1;
+        width: min(1480px, 100%);
+        min-height: 100vh;
+        margin: 0 auto;
+        padding: 28px 32px;
+        display: grid;
+        grid-template-rows: auto auto 1fr auto;
+        gap: 20px;
+      }
+
+      /* ─── Top bar ─── */
+      .topbar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 20px;
+        min-height: 56px;
+      }
+
+      .brand {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        min-width: 0;
+      }
+
+      .mark {
+        width: 44px;
+        height: 44px;
+        display: grid;
+        place-items: center;
+        border-radius: 12px;
+        color: #fff;
+        background: linear-gradient(135deg, var(--accent), var(--cyan));
+        box-shadow: 0 8px 30px rgba(99, 102, 241, 0.3);
+        flex: 0 0 auto;
+        transition: transform 0.3s ease, box-shadow 0.3s ease;
+      }
+      .mark:hover {
+        transform: scale(1.08) rotate(-3deg);
+        box-shadow: 0 12px 40px rgba(99, 102, 241, 0.45);
+      }
+
+      h1 {
+        font-size: clamp(1.15rem, 1rem + 0.6vw, 1.6rem);
+        font-weight: 700;
+        line-height: 1.15;
+        letter-spacing: -0.02em;
+        background: linear-gradient(135deg, var(--text-primary), var(--cyan));
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+      }
+
+      .subtle {
+        margin-top: 3px;
+        color: var(--text-muted);
+        font-size: 0.85rem;
+        line-height: 1.4;
+      }
+
+      .toolbar {
+        display: flex;
+        align-items: center;
+        justify-content: flex-end;
+        gap: 10px;
+        flex-wrap: wrap;
+      }
+
+      /* ─── Buttons ─── */
+      button {
+        min-height: 2.5rem;
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        padding: 0.55rem 0.9rem;
+        color: var(--text-secondary);
+        background: var(--bg-card);
+        backdrop-filter: blur(12px);
+        cursor: pointer;
+        font-size: 0.9rem;
+        font-weight: 500;
+        transition: all 0.2s ease;
+      }
+      button:hover {
+        transform: translateY(-1px);
+        border-color: var(--border-hover);
+        background: var(--bg-card-hover);
+        color: var(--text-primary);
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+      }
+      button:active { transform: translateY(0); }
+      button:disabled {
+        cursor: not-allowed;
+        opacity: 0.35;
+        transform: none;
+      }
+
+      .primary {
+        background: linear-gradient(135deg, var(--accent), #8b5cf6);
+        color: #fff;
+        border-color: transparent;
+        font-weight: 600;
+        box-shadow: 0 4px 20px var(--accent-glow);
+      }
+      .primary:hover {
+        background: linear-gradient(135deg, var(--accent-hover), #a78bfa);
+        border-color: transparent;
+        color: #fff;
+        box-shadow: 0 6px 30px var(--accent-glow);
+      }
+
+      .ghost {
+        background: rgba(255, 255, 255, 0.03);
+        border-color: var(--border);
+      }
+
+      .switch-wrap {
+        min-height: 2.5rem;
+        display: inline-flex;
+        align-items: center;
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        padding: 0 0.75rem;
+        background: var(--bg-card);
+        backdrop-filter: blur(12px);
+      }
+
+      .icon-button {
+        width: 2.5rem;
+        padding: 0;
+        display: inline-grid;
+        place-items: center;
+      }
+
+      .icon {
+        width: 18px;
+        height: 18px;
+        display: block;
+      }
+
+      /* ─── Status bar ─── */
+      .status {
+        min-height: 46px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        padding: 10px 16px;
+        background: var(--bg-card);
+        backdrop-filter: blur(16px);
+        color: var(--text-muted);
+        font-size: 0.9rem;
+        transition: all 0.3s ease;
+      }
+      .status[data-tone="ok"] {
+        color: var(--green);
+        background: var(--green-bg);
+        border-color: var(--green-border);
+      }
+      .status[data-tone="error"] {
+        color: var(--red);
+        background: var(--red-bg);
+        border-color: var(--red-border);
+      }
+
+      /* ─── Workbench ─── */
+      .workbench {
+        min-height: 0;
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+        gap: 20px;
+      }
+
+      .pane {
+        min-height: 520px;
+        display: grid;
+        grid-template-rows: auto 1fr auto;
+        border: 1px solid var(--border);
+        border-radius: 16px;
+        overflow: hidden;
+        background: var(--bg-card);
+        backdrop-filter: blur(20px);
+        box-shadow: var(--shadow-lg);
+        transition: border-color 0.3s ease, box-shadow 0.3s ease;
+      }
+      .pane:focus-within {
+        border-color: var(--border-active);
+        box-shadow: var(--shadow-lg), var(--shadow-glow);
+      }
+
+      .pane-head {
+        min-height: 54px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 12px 16px;
+        border-bottom: 1px solid var(--border);
+        background: rgba(15, 23, 42, 0.5);
+      }
+
+      .pane-title {
+        font-size: 0.92rem;
+        font-weight: 600;
+        color: var(--text-primary);
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .pane-title .dot {
+        width: 8px; height: 8px;
+        border-radius: 50%;
+        display: inline-block;
+      }
+      .pane-title .dot-input { background: var(--cyan); box-shadow: 0 0 8px var(--cyan-glow); }
+      .pane-title .dot-output { background: var(--green); box-shadow: 0 0 8px rgba(52, 211, 153, 0.3); }
+
+      .pane-actions {
+        display: flex;
+        gap: 6px;
+        align-items: center;
+      }
+
+      textarea {
+        width: 100%;
+        min-height: 100%;
+        resize: none;
+        border: 0;
+        outline: 0;
+        padding: 18px;
+        color: var(--text-primary);
+        background: var(--bg-input);
+        font-family: 'JetBrains Mono', 'Cascadia Code', 'SFMono-Regular', Consolas, monospace;
+        font-size: 0.88rem;
+        line-height: 1.6;
+        tab-size: 2;
+        caret-color: var(--cyan);
+      }
+      textarea::placeholder {
+        color: var(--text-muted);
+        opacity: 0.6;
+      }
+      textarea::selection {
+        background: rgba(99, 102, 241, 0.3);
+      }
+
+      .pane-foot {
+        min-height: 42px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 8px 16px;
+        border-top: 1px solid var(--border);
+        color: var(--text-muted);
+        background: rgba(15, 23, 42, 0.5);
+        font-size: 0.78rem;
+        font-family: 'JetBrains Mono', monospace;
+      }
+
+      .switch {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        color: var(--text-secondary);
+        user-select: none;
+        font-size: 0.88rem;
+        cursor: pointer;
+      }
+      .switch input {
+        width: 1rem;
+        height: 1rem;
+        accent-color: var(--accent);
+        cursor: pointer;
+      }
+
+      .file-input {
+        position: absolute;
+        width: 1px; height: 1px;
+        overflow: hidden;
+        clip: rect(0 0 0 0);
+        white-space: nowrap;
+        clip-path: inset(50%);
+      }
+
+      /* ─── Footer ─── */
+      .footer {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 16px;
+        color: var(--text-muted);
+        font-size: 0.78rem;
+        padding-top: 8px;
+      }
+      .footer a {
+        color: var(--accent-hover);
+        text-decoration: none;
+        transition: color 0.2s;
+      }
+      .footer a:hover { color: var(--cyan); }
+      .footer .badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        padding: 3px 10px;
+        border-radius: 20px;
+        border: 1px solid var(--border);
+        background: var(--bg-card);
+        font-size: 0.72rem;
+        color: var(--text-secondary);
+      }
+      .footer .badge .pulse {
+        width: 6px; height: 6px;
+        border-radius: 50%;
+        background: var(--green);
+        animation: pulse 2s infinite;
+      }
+
+      @keyframes pulse {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0.4; }
+      }
+
+      /* ─── Steps guide ─── */
+      .steps {
+        display: flex;
+        gap: 12px;
+        padding: 0;
+        margin: 0 0 4px;
+        list-style: none;
+        flex-wrap: wrap;
+      }
+      .steps li {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 8px 14px;
+        border-radius: 10px;
+        border: 1px solid var(--border);
+        background: var(--bg-card);
+        backdrop-filter: blur(12px);
+        font-size: 0.82rem;
+        color: var(--text-secondary);
+        transition: all 0.2s ease;
+      }
+      .steps li:hover {
+        border-color: var(--border-hover);
+        color: var(--text-primary);
+      }
+      .step-num {
+        width: 22px; height: 22px;
+        display: grid;
+        place-items: center;
+        border-radius: 6px;
+        background: linear-gradient(135deg, var(--accent), #8b5cf6);
+        color: #fff;
+        font-size: 0.72rem;
+        font-weight: 700;
+        flex-shrink: 0;
+      }
+
+      /* ─── Responsive ─── */
+      @media (max-width: 900px) {
+        .shell { padding: 16px; }
+        .topbar, .footer { align-items: flex-start; flex-direction: column; }
+        .toolbar { justify-content: flex-start; width: 100%; }
+        .workbench { grid-template-columns: 1fr; }
+        .pane { min-height: 380px; }
+        .steps { flex-direction: column; }
+      }
+
+      @media (max-width: 560px) {
+        .shell { padding: 12px; }
+        .pane-head, .pane-foot { flex-direction: column; align-items: flex-start; }
+        .pane-actions { width: 100%; }
+        button:not(.icon-button) { flex: 1 1 8rem; }
+      }
+
+      /* ─── Toast animation ─── */
+      .status.animate-in {
+        animation: statusPop 0.3s ease;
+      }
+      @keyframes statusPop {
+        0% { transform: scale(0.98); opacity: 0.7; }
+        50% { transform: scale(1.01); }
+        100% { transform: scale(1); opacity: 1; }
+      }
+    </style>
+  </head>
+  <body>
+    <!-- Floating background orbs -->
+    <div class="orb orb-1"></div>
+    <div class="orb orb-2"></div>
+    <div class="orb orb-3"></div>
+
+    <main class="shell">
+      <!-- Top bar -->
+      <header class="topbar">
+        <div class="brand">
+          <div class="mark" aria-hidden="true">
+            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M8 3H5a2 2 0 0 0-2 2v3"></path>
+              <path d="M16 3h3a2 2 0 0 1 2 2v3"></path>
+              <path d="M8 21H5a2 2 0 0 1-2-2v-3"></path>
+              <path d="M16 21h3a2 2 0 0 0 2-2v-3"></path>
+              <path d="m8 12 2 2 4-5"></path>
+            </svg>
+          </div>
+          <div>
+            <h1>Session → Auth.json</h1>
+            <p class="subtle">ChatGPT Session 转换为 Codex CLI 认证文件</p>
+          </div>
+        </div>
+
+        <div class="toolbar" aria-label="全局操作">
+          <button class="primary" id="convertButton" type="button">
+            <svg class="icon" style="width:16px;height:16px;vertical-align:-3px;margin-right:5px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M5 12h14"></path><path d="m12 5 7 7-7 7"></path>
+            </svg>
+            转换
+          </button>
+          <span class="switch-wrap">
+            <label class="switch" title="输出压缩 JSON">
+              <input id="compactToggle" type="checkbox">
+              压缩
+            </label>
+          </span>
+        </div>
+      </header>
+
+      <!-- Quick steps -->
+      <ul class="steps">
+        <li>
+          <span class="step-num">1</span>
+          登录 <strong>chatgpt.com</strong>
+        </li>
+        <li>
+          <span class="step-num">2</span>
+          访问 <code style="color:var(--cyan);font-family:'JetBrains Mono',monospace;font-size:0.8rem;">/api/auth/session</code> 复制 JSON
+        </li>
+        <li>
+          <span class="step-num">3</span>
+          粘贴到左侧 → 点击转换
+        </li>
+        <li>
+          <span class="step-num">4</span>
+          下载 <code style="color:var(--green);font-family:'JetBrains Mono',monospace;font-size:0.8rem;">auth.json</code> 放入 Codex 配置目录
+        </li>
+      </ul>
+
+      <!-- Status bar -->
+      <section class="status" id="status" aria-live="polite">
+        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <circle cx="12" cy="12" r="10"></circle>
+          <path d="M12 16v-4"></path>
+          <path d="M12 8h.01"></path>
+        </svg>
+        <span id="statusText">等待输入 — 粘贴 ChatGPT Session JSON 后点击「转换」</span>
+      </section>
+
+      <!-- Workbench -->
+      <section class="workbench" aria-label="转换区域">
+        <!-- Source pane -->
+        <article class="pane">
+          <div class="pane-head">
+            <h2 class="pane-title">
+              <span class="dot dot-input"></span>
+              源 JSON
+            </h2>
+            <div class="pane-actions">
+              <input class="file-input" id="fileInput" type="file" accept="application/json,.json">
+              <button class="ghost icon-button" id="openFileButton" type="button" title="打开 JSON 文件" aria-label="打开 JSON 文件">
+                <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"></path>
+                  <path d="M14 2v4a2 2 0 0 0 2 2h4"></path>
+                  <path d="M12 18v-6"></path>
+                  <path d="m9 15 3 3 3-3"></path>
+                </svg>
+              </button>
+              <button class="ghost icon-button" id="pasteButton" type="button" title="从剪贴板粘贴" aria-label="从剪贴板粘贴">
+                <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <rect width="8" height="4" x="8" y="2" rx="1"></rect>
+                  <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path>
+                </svg>
+              </button>
+              <button class="ghost icon-button" id="clearButton" type="button" title="清空" aria-label="清空">
+                <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M3 6h18"></path>
+                  <path d="M8 6V4h8v2"></path>
+                  <path d="m19 6-1 14H6L5 6"></path>
+                  <path d="M10 11v6"></path>
+                  <path d="M14 11v6"></path>
+                </svg>
+              </button>
+            </div>
+          </div>
+          <textarea id="sourceInput" spellcheck="false" autocomplete="off" autocapitalize="off" placeholder='{"accessToken":"eyJhbG...","account":{"id":"user-xxx"}}'></textarea>
+          <div class="pane-foot">
+            <span id="sourceStats">0 字符</span>
+            <span style="color:var(--cyan);">INPUT</span>
+          </div>
+        </article>
+
+        <!-- Target pane -->
+        <article class="pane">
+          <div class="pane-head">
+            <h2 class="pane-title">
+              <span class="dot dot-output"></span>
+              auth.json
+            </h2>
+            <div class="pane-actions">
+              <button class="ghost icon-button" id="copyButton" type="button" title="复制结果" aria-label="复制结果" disabled>
+                <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <rect width="14" height="14" x="8" y="8" rx="2"></rect>
+                  <path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"></path>
+                </svg>
+              </button>
+              <button class="ghost icon-button" id="downloadButton" type="button" title="下载 auth.json" aria-label="下载 auth.json" disabled>
+                <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                  <path d="M7 10l5 5 5-5"></path>
+                  <path d="M12 15V3"></path>
+                </svg>
+              </button>
+            </div>
+          </div>
+          <textarea id="targetOutput" spellcheck="false" readonly placeholder="转换结果会显示在这里..."></textarea>
+          <div class="pane-foot">
+            <span id="targetStats">0 字符</span>
+            <span id="refreshStamp" style="color:var(--green);">—</span>
+          </div>
+        </article>
+      </section>
+
+      <!-- Footer -->
+      <footer class="footer">
+        <span>
+          <span class="badge">
+            <span class="pulse"></span>
+            纯前端本地转换 · 不上传数据
+          </span>
+        </span>
+        <span style="color:var(--text-muted);">Ctrl + Enter 快捷转换</span>
+      </footer>
+    </main>
+
+    <script>
+      /* ═══════════════════════════════════════════════
+         DOM references
+         ═══════════════════════════════════════════════ */
+      const sourceInput    = document.querySelector("#sourceInput");
+      const targetOutput   = document.querySelector("#targetOutput");
+      const convertButton  = document.querySelector("#convertButton");
+      const compactToggle  = document.querySelector("#compactToggle");
+      const statusBox      = document.querySelector("#status");
+      const statusText     = document.querySelector("#statusText");
+      const sourceStats    = document.querySelector("#sourceStats");
+      const targetStats    = document.querySelector("#targetStats");
+      const refreshStamp   = document.querySelector("#refreshStamp");
+      const copyButton     = document.querySelector("#copyButton");
+      const downloadButton = document.querySelector("#downloadButton");
+      const clearButton    = document.querySelector("#clearButton");
+      const pasteButton    = document.querySelector("#pasteButton");
+      const openFileButton = document.querySelector("#openFileButton");
+      const fileInput      = document.querySelector("#fileInput");
+
+      /* ═══════════════════════════════════════════════
+         Core conversion logic
+         ═══════════════════════════════════════════════ */
+      function utcNowWithMicroseconds() {
+        const date = new Date();
+        const iso = date.toISOString();
+        return iso.replace("Z", "000Z");
+      }
+
+      function convertSessionToAuth(source, compact) {
+        let parsed;
+        try {
+          parsed = JSON.parse(source);
+        } catch (error) {
+          throw new Error("源 JSON 解析失败：" + error.message);
+        }
+
+        if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+          throw new Error("源 JSON 必须是对象。");
+        }
+        if (typeof parsed.accessToken !== "string" || parsed.accessToken.length === 0) {
+          throw new Error("缺少字段：accessToken");
+        }
+        if (!parsed.account || typeof parsed.account.id !== "string" || parsed.account.id.length === 0) {
+          throw new Error("缺少字段：account.id");
+        }
+
+        const lastRefresh = utcNowWithMicroseconds();
+        const output = {
+          last_refresh: lastRefresh,
+          tokens: {
+            access_token: parsed.accessToken,
+            account_id: parsed.account.id,
+            id_token: parsed.accessToken,
+            refresh_token: parsed.accessToken
+          }
+        };
+
+        return {
+          json: JSON.stringify(output, null, compact ? 0 : 2) + "\n",
+          lastRefresh
+        };
+      }
+
+      /* ═══════════════════════════════════════════════
+         UI helpers
+         ═══════════════════════════════════════════════ */
+      function setStatus(message, tone) {
+        statusText.textContent = message;
+        if (tone) {
+          statusBox.dataset.tone = tone;
+        } else {
+          delete statusBox.dataset.tone;
+        }
+        // Trigger animation
+        statusBox.classList.remove("animate-in");
+        void statusBox.offsetWidth; // force reflow
+        statusBox.classList.add("animate-in");
+      }
+
+      function updateStats() {
+        sourceStats.textContent = sourceInput.value.length + " 字符";
+        targetStats.textContent = targetOutput.value.length + " 字符";
+        const hasOutput = targetOutput.value.length > 0;
+        copyButton.disabled = !hasOutput;
+        downloadButton.disabled = !hasOutput;
+      }
+
+      function convert() {
+        const source = sourceInput.value.trim();
+        if (!source) {
+          targetOutput.value = "";
+          refreshStamp.textContent = "—";
+          updateStats();
+          setStatus("等待输入 — 粘贴 ChatGPT Session JSON 后点击「转换」");
+          return;
+        }
+
+        try {
+          const result = convertSessionToAuth(source, compactToggle.checked);
+          targetOutput.value = result.json;
+          refreshStamp.textContent = result.lastRefresh;
+          updateStats();
+          setStatus("✓ 转换完成", "ok");
+        } catch (error) {
+          targetOutput.value = "";
+          refreshStamp.textContent = "—";
+          updateStats();
+          setStatus("✗ " + error.message, "error");
+        }
+      }
+
+      async function copyOutput() {
+        if (!targetOutput.value) return;
+        try {
+          await navigator.clipboard.writeText(targetOutput.value);
+          setStatus("✓ 已复制到剪贴板", "ok");
+        } catch {
+          targetOutput.focus();
+          targetOutput.select();
+          document.execCommand("copy");
+          setStatus("✓ 已复制到剪贴板", "ok");
+        }
+      }
+
+      function downloadOutput() {
+        if (!targetOutput.value) return;
+        const blob = new Blob([targetOutput.value], { type: "application/json;charset=utf-8" });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = "auth.json";
+        document.body.append(link);
+        link.click();
+        link.remove();
+        URL.revokeObjectURL(url);
+        setStatus("✓ 已下载 auth.json", "ok");
+      }
+
+      async function pasteFromClipboard() {
+        try {
+          sourceInput.value = await navigator.clipboard.readText();
+          updateStats();
+          convert();
+        } catch {
+          setStatus("✗ 浏览器未允许读取剪贴板，请手动粘贴", "error");
+        }
+      }
+
+      function clearAll() {
+        sourceInput.value = "";
+        targetOutput.value = "";
+        refreshStamp.textContent = "—";
+        updateStats();
+        setStatus("已清空");
+        sourceInput.focus();
+      }
+
+      async function loadFile(file) {
+        if (!file) return;
+        sourceInput.value = await file.text();
+        updateStats();
+        convert();
+      }
+
+      /* ═══════════════════════════════════════════════
+         Event bindings
+         ═══════════════════════════════════════════════ */
+      convertButton.addEventListener("click", convert);
+      compactToggle.addEventListener("change", convert);
+      copyButton.addEventListener("click", copyOutput);
+      downloadButton.addEventListener("click", downloadOutput);
+      clearButton.addEventListener("click", clearAll);
+      pasteButton.addEventListener("click", pasteFromClipboard);
+      openFileButton.addEventListener("click", () => fileInput.click());
+      fileInput.addEventListener("change", () => loadFile(fileInput.files[0]));
+      sourceInput.addEventListener("input", updateStats);
+      sourceInput.addEventListener("keydown", (event) => {
+        if ((event.ctrlKey || event.metaKey) && event.key === "Enter") {
+          event.preventDefault();
+          convert();
+        }
+      });
+
+      updateStats();
+    </script>
+  </body>
+</html>
