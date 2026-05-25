@@ -499,6 +499,95 @@
         flex-shrink: 0;
       }
 
+      /* ─── Deprecation Banner ─── */
+      .depr-banner {
+        position: relative;
+        border-radius: 14px;
+        border: 1px solid rgba(251, 146, 60, 0.4);
+        background: linear-gradient(135deg, rgba(251, 146, 60, 0.08), rgba(239, 68, 68, 0.06));
+        padding: 16px 20px;
+        display: flex;
+        gap: 14px;
+        align-items: flex-start;
+      }
+      .depr-banner .depr-icon {
+        flex-shrink: 0;
+        width: 22px; height: 22px;
+        color: #fb923c;
+        margin-top: 1px;
+      }
+      .depr-banner .depr-body {
+        flex: 1;
+        min-width: 0;
+      }
+      .depr-banner .depr-title {
+        font-size: 0.95rem;
+        font-weight: 700;
+        color: #fb923c;
+        margin-bottom: 6px;
+      }
+      .depr-banner .depr-desc {
+        font-size: 0.85rem;
+        color: var(--text-secondary);
+        line-height: 1.6;
+        margin-bottom: 14px;
+      }
+      .depr-banner .depr-desc code {
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 0.8rem;
+        color: var(--cyan);
+        background: rgba(34, 211, 238, 0.08);
+        padding: 1px 6px;
+        border-radius: 4px;
+      }
+      .alt-methods {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        margin-top: 4px;
+      }
+      .alt-method {
+        flex: 1 1 240px;
+        border-radius: 10px;
+        border: 1px solid var(--border);
+        background: rgba(15, 23, 42, 0.5);
+        padding: 12px 14px;
+        display: flex;
+        flex-direction: column;
+        gap: 5px;
+      }
+      .alt-method .am-label {
+        font-size: 0.72rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--text-muted);
+      }
+      .alt-method .am-title {
+        font-size: 0.88rem;
+        font-weight: 600;
+        color: var(--text-primary);
+      }
+      .alt-method .am-cmd {
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 0.78rem;
+        color: var(--green);
+        background: rgba(52, 211, 153, 0.07);
+        border: 1px solid rgba(52, 211, 153, 0.15);
+        border-radius: 6px;
+        padding: 5px 10px;
+        margin-top: 4px;
+        word-break: break-all;
+      }
+      .alt-method .am-note {
+        font-size: 0.76rem;
+        color: var(--text-muted);
+        line-height: 1.5;
+        margin-top: 2px;
+      }
+      .am-recommended { border-color: rgba(99, 102, 241, 0.35); }
+      .am-recommended .am-label { color: var(--accent); }
+
       /* ─── Responsive ─── */
       @media (max-width: 900px) {
         .shell { padding: 16px; }
@@ -534,6 +623,42 @@
     <div class="orb orb-3"></div>
 
     <main class="shell">
+      <!-- Deprecation Banner -->
+      <div class="depr-banner" role="alert" aria-label="重要提示">
+        <svg class="depr-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
+          <line x1="12" y1="9" x2="12" y2="13"></line>
+          <line x1="12" y1="17" x2="12.01" y2="17"></line>
+        </svg>
+        <div class="depr-body">
+          <div class="depr-title">⚠️ 此方案目前已失效</div>
+          <p class="depr-desc">
+            OpenAI 已限制网页端 Access Token（AT）直接调用 Codex 模型。
+            虽然 <code>/api/auth/session</code> 端点本身仍可访问，但通过此 AT 生成的 <code>auth.json</code> 已无法通过 Codex CLI 认证。
+            请使用下方官方支持的认证方式代替。
+          </p>
+          <div class="alt-methods">
+            <div class="alt-method am-recommended">
+              <span class="am-label">✦ 推荐 · 本地环境</span>
+              <span class="am-title">浏览器 OAuth 登录</span>
+              <div class="am-cmd">codex login</div>
+              <span class="am-note">运行后自动打开浏览器完成 OAuth，适合有桌面环境的本地机器。</span>
+            </div>
+            <div class="alt-method">
+              <span class="am-label">设备码授权 · 无浏览器环境</span>
+              <span class="am-title">Device Code 认证</span>
+              <div class="am-cmd">codex login --device-auth</div>
+              <span class="am-note">终端显示一次性码 + URL，用任意设备的浏览器完成授权。适合 SSH / 服务器环境。</span>
+            </div>
+            <div class="alt-method">
+              <span class="am-label">API Key · CI/CD / 按量计费</span>
+              <span class="am-title">OpenAI API Key</span>
+              <div class="am-cmd">export OPENAI_API_KEY="sk-..."</div>
+              <span class="am-note">从 <a href="https://platform.openai.com/api-keys" target="_blank" rel="noopener" style="color:var(--cyan);">platform.openai.com</a> 生成，与 ChatGPT 订阅独立计费。</span>
+            </div>
+          </div>
+        </div>
+      </div>
       <!-- Top bar -->
       <header class="topbar">
         <div class="brand">
@@ -568,16 +693,16 @@
         </div>
       </header>
 
-      <!-- Quick steps -->
-      <ul class="steps">
+      <!-- Quick steps (historical reference) -->
+      <ul class="steps" style="opacity:0.5;pointer-events:none;user-select:none;" title="此流程已失效，仅供参考">
         <li>
-          <span class="step-num">1</span>
-          登录 <strong>chatgpt.com</strong>
+          <span class="step-num" style="background:var(--text-muted);">1</span>
+          <s>登录 <strong>chatgpt.com</strong></s>
         </li>
         <li>
-          <span class="step-num">2</span>
-          访问 <code style="color:var(--cyan);font-family:'JetBrains Mono',monospace;font-size:0.8rem;">/api/auth/session</code> 复制 JSON
-          <a class="step-link" id="sessionLink" href="https://chatgpt.com/api/auth/session" target="_blank" rel="noopener noreferrer" title="在新标签页打开 ChatGPT Session 页面">
+          <span class="step-num" style="background:var(--text-muted);">2</span>
+          <s>访问 <code style="font-family:'JetBrains Mono',monospace;font-size:0.8rem;">/api/auth/session</code> 复制 JSON</s>
+          <a class="step-link" id="sessionLink" href="https://chatgpt.com/api/auth/session" target="_blank" rel="noopener noreferrer" title="在新标签页打开 ChatGPT Session 页面" style="pointer-events:all;opacity:1;">
             <svg class="link-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
               <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
               <polyline points="15 3 21 3 21 9"></polyline>
@@ -587,12 +712,12 @@
           </a>
         </li>
         <li>
-          <span class="step-num">3</span>
-          粘贴到左侧 → 点击转换
+          <span class="step-num" style="background:var(--text-muted);">3</span>
+          <s>粘贴到左侧 → 点击转换</s>
         </li>
         <li>
-          <span class="step-num">4</span>
-          下载 <code style="color:var(--green);font-family:'JetBrains Mono',monospace;font-size:0.8rem;">auth.json</code> 放入 Codex 配置目录
+          <span class="step-num" style="background:var(--text-muted);">4</span>
+          <s>下载 <code style="font-family:'JetBrains Mono',monospace;font-size:0.8rem;">auth.json</code> 放入 Codex 配置目录</s> <span style="color:#fb923c;font-size:0.78rem;font-weight:600;">⚠ AT 已无法用于 Codex 认证</span>
         </li>
       </ul>
 
